@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCP tool reference: search-mcp</title>
+<meta name="description" content="Reference for the search-mcp MCP Worker: client setup, bearer tokens, and the list_repos, search, get_file, ask and corpus_status tools and corpus resources.">
+<link rel="canonical" href="https://search-mcp.dev/mcp/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/theme.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="1" y="1" width="30" height="30" rx="8" fill="currentColor"/><circle cx="14" cy="14" r="6.5" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M19 19l6 6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>search-mcp</a>
+    <nav class="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="/install/">Install</a></li>
+        <li><a href="/configuration/">Configuration</a></li>
+        <li><a href="/mcp/" aria-current="page">MCP tools</a></li>
+        <li><a href="/widget/">Ask widget</a></li>
+        <li><a href="/self-host/">Self-host</a></li>
+        <li><a href="https://github.com/skyphusion-labs/search-mcp">GitHub</a></li>
+      </ul>
+    </nav>
+    <button id="theme-btn" class="theme-btn" type="button" hidden>Theme</button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-head">
+    <div class="wrap">
+      <p class="eyebrow">MCP tools</p>
+      <h1>MCP tool reference</h1>
+      <p class="lede">The MCP Worker serves Streamable HTTP MCP at <code>POST /mcp</code>. Every request needs a bearer token. It gives an agent five tools and two resources over your corpus.</p>
+      <nav class="toc" aria-label="On this page">
+        <p>On this page</p>
+        <ul>
+          <li><a href="#connect">Connect a client</a></li>
+          <li><a href="#flow">Recommended order</a></li>
+          <li><a href="#list_repos">list_repos</a></li>
+          <li><a href="#search">search</a></li>
+          <li><a href="#get_file">get_file</a></li>
+          <li><a href="#ask">ask</a></li>
+          <li><a href="#corpus_status">corpus_status</a></li>
+          <li><a href="#resources">Resources</a></li>
+        </ul>
+      </nav>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="connect">
+    <div class="wrap prose">
+      <h2 id="connect">Connect a client</h2>
+<pre><code>{
+  "mcpServers": {
+    "search-mcp": {
+      "type": "http",
+      "url": "https://YOUR_MCP_HOST/mcp",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" }
+    }
+  }
+}</code></pre>
+      <p>The token is the <code>MCP_TOKEN</code> secret on the Worker. It is one token, or comma-separated <code>name=token</code> pairs, so that logs name each consumer. A missing or wrong token gets HTTP 401. <code>GET /health</code> answers without a token.</p>
+      <p>Test the Worker from a shell:</p>
+<pre><code>curl -sS -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "content-type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+  "https://YOUR_MCP_HOST/mcp"</code></pre>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="flow">
+    <div class="wrap prose">
+      <h2 id="flow">Recommended order</h2>
+      <p>Use <strong>list_repos</strong>, then <strong>search</strong>, then <strong>get_file</strong>. Use <strong>ask</strong> when you want one written answer instead of raw chunks.</p>
+      <div class="note">
+        <p><strong>Filters are best-effort.</strong> In <code>search</code> and <code>ask</code>, the <code>repos</code>, <code>path_prefix</code> and <code>min_score</code> filters apply after a capped fetch from AI Search. The fetch takes only the top-ranked chunks: 4 times <code>max_num_results</code>, at least 20 and at most 50. A narrow filter can return "No results." while matches exist lower in the ranking. If a filtered search is empty, try a more specific query or fewer filters.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="list_repos">
+    <div class="wrap prose">
+      <h2 id="list_repos">list_repos</h2>
+      <p>Lists the repo names in this corpus. Use these exact strings for the <code>repos</code> filter. It takes no arguments.</p>
+      <p>The names come from the <code>CORPUS_REPOS</code> var when it is set, or else from the prefixes in the <code>CORPUS</code> R2 bucket. If the R2 listing fails, the tool returns an error, not an empty list.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="search">
+    <div class="wrap prose">
+      <h2 id="search">search</h2>
+      <p>Searches the indexed corpus. It returns chunks with <code>repo</code>, <code>path</code>, <code>score</code> and <code>text</code>, at most 2 chunks per file.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Argument</th><th>Type</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>query</code></td><td>string, required</td><td>A natural-language or keyword query.</td></tr>
+            <tr><td><code>max_num_results</code></td><td>number</td><td>The most chunks to return, 1 to 20. Default 8.</td></tr>
+            <tr><td><code>repos</code></td><td>array of strings</td><td>Exact repo names from <code>list_repos</code>. Best-effort.</td></tr>
+            <tr><td><code>path_prefix</code></td><td>string, or array of strings</td><td>A path prefix such as <code>"docs/"</code>, matched on the path only. Best-effort. An array that holds a non-string is an argument error.</td></tr>
+            <tr><td><code>retrieval_type</code></td><td><code>hybrid</code>, <code>keyword</code> or <code>vector</code></td><td>Default <code>hybrid</code>. Use <code>keyword</code> for identifiers and symbols.</td></tr>
+            <tr><td><code>rewrite</code></td><td>boolean</td><td>AI Search query rewrite. Default on for hybrid and vector, off for keyword.</td></tr>
+            <tr><td><code>min_score</code></td><td>number</td><td>Drops chunks that score below this value, on the 0 to 1 scale from AI Search. Best-effort.</td></tr>
+            <tr><td><code>rerank</code></td><td>boolean</td><td>Upstream reranking, where AI Search supports it. Default off.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="get_file">
+    <div class="wrap prose">
+      <h2 id="get_file">get_file</h2>
+      <p>Reads one corpus file from R2 by repo and path. Use it after <code>search</code> when a chunk is not enough. It needs the <code>CORPUS</code> R2 binding. It tries the plain key and the <code>.txt</code> key that the sync uses for renamed files.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Argument</th><th>Type</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>repo</code></td><td>string, required</td><td>The exact repo name.</td></tr>
+            <tr><td><code>path</code></td><td>string, required</td><td>The path in the repo, as in a search result.</td></tr>
+            <tr><td><code>max_bytes</code></td><td>number</td><td>The most bytes to return. Default 65536, hard cap 262144.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="ask">
+    <div class="wrap prose">
+      <h2 id="ask">ask</h2>
+      <p>Answers a question in prose from the corpus, with a list of sources. It uses retrieval plus one non-streaming generation call. Use <code>search</code> and <code>get_file</code> when you need the raw evidence.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Argument</th><th>Type</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>question</code></td><td>string, required</td><td>The question to answer from the corpus.</td></tr>
+            <tr><td><code>repos</code></td><td>array of strings</td><td>A repo filter on the citation chunks. Best-effort.</td></tr>
+            <tr><td><code>path_prefix</code></td><td>string, or array of strings</td><td>A path prefix filter on the citation chunks.</td></tr>
+            <tr><td><code>max_num_results</code></td><td>number</td><td>The retrieval budget for the answer, 1 to 20. Default 8.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="corpus_status">
+    <div class="wrap prose">
+      <h2 id="corpus_status">corpus_status</h2>
+      <p>Returns the metadata of the last corpus sync, so an agent can judge how fresh the corpus is. It reads <code>_meta/corpus-status.json</code>, which <code>sync.mjs</code> writes to R2 after each upload. With no R2 binding, it falls back to <code>CORPUS_REPOS</code>. It takes no arguments.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="resources">
+    <div class="wrap prose">
+      <h2 id="resources">Resources</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>URI</th><th>Type</th><th>Content</th></tr></thead>
+          <tbody>
+            <tr><td><code>corpus://catalog</code></td><td><code>application/json</code></td><td>The repo list and a short description of this corpus.</td></tr>
+            <tr><td><code>corpus://skill</code></td><td><code>text/markdown</code></td><td>Instructions for agents on how to use the tools.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The tool definitions are in <a href="https://github.com/skyphusion-labs/search-mcp/blob/v0.7.0/src/mcp.ts">src/mcp.ts</a> at search-mcp v0.7.0.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <ul>
+      <li><a href="/privacy/">Privacy</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp/releases/tag/v0.7.0">Latest release</a></li>
+      <li><a href="https://www.npmjs.com/package/@skyphusion/search-mcp">npm package</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp">search-mcp source</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp-site">Site source</a></li>
+      <li><a href="https://skyphusion.org">Skyphusion Labs</a></li>
+    </ul>
+    <p>This site sets no cookies and loads no trackers, fonts or scripts from anyone else.</p>
+    <p>search-mcp is free software under the AGPL-3.0. This site is AGPL-3.0 too.</p>
+  </div>
+</footer>
+</body>
+</html>

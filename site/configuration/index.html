@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuration: search-mcp</title>
+<meta name="description" content="Configure search-mcp: targets.json, includePaths and excludePaths, the size cap, the corpus manifest, sync environment variables, and the Worker vars and secrets.">
+<link rel="canonical" href="https://search-mcp.dev/configuration/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/theme.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="1" y="1" width="30" height="30" rx="8" fill="currentColor"/><circle cx="14" cy="14" r="6.5" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M19 19l6 6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>search-mcp</a>
+    <nav class="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="/install/">Install</a></li>
+        <li><a href="/configuration/" aria-current="page">Configuration</a></li>
+        <li><a href="/mcp/">MCP tools</a></li>
+        <li><a href="/widget/">Ask widget</a></li>
+        <li><a href="/self-host/">Self-host</a></li>
+        <li><a href="https://github.com/skyphusion-labs/search-mcp">GitHub</a></li>
+      </ul>
+    </nav>
+    <button id="theme-btn" class="theme-btn" type="button" hidden>Theme</button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-head">
+    <div class="wrap">
+      <p class="eyebrow">Configuration</p>
+      <h1>Configure the corpus and the Workers</h1>
+      <p class="lede">The corpus sync reads <code>targets.json</code> and a few environment variables. Each Worker reads its own wrangler file, its vars and its secrets.</p>
+      <nav class="toc" aria-label="On this page">
+        <p>On this page</p>
+        <ul>
+          <li><a href="#targets">targets.json</a></li>
+          <li><a href="#bounds">Bounding a corpus: includePaths and excludePaths</a></li>
+          <li><a href="#refusals">When the sync refuses to run</a></li>
+          <li><a href="#size-cap">Size cap</a></li>
+          <li><a href="#manifest">Corpus manifest</a></li>
+          <li><a href="#sync-env">Sync environment variables</a></li>
+          <li><a href="#query-config">Query Worker settings</a></li>
+          <li><a href="#mcp-config">MCP Worker settings</a></li>
+          <li><a href="#reindex">Reindex behavior</a></li>
+        </ul>
+      </nav>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="targets">
+    <div class="wrap prose">
+      <h2 id="targets">targets.json</h2>
+      <p>A target names one AI Search instance, the R2 bucket it reads, and the repos that go into it. <code>repos</code> are directory names under the clone root. Only git-tracked files are uploaded.</p>
+<pre><code>{
+  "includePaths": { "example-repo": ["docs/"] },
+  "excludePaths": { "example-repo": ["vendor/private-notes/"] },
+  "targets": {
+    "corpus": {
+      "instance": "my-ai-search-instance",
+      "bucket": "my-search-corpus",
+      "repos": ["example-repo"]
+    }
+  }
+}</code></pre>
+      <p>With the npm CLIs, the file is <code>./targets.json</code>, or the path in <code>SEARCH_MCP_TARGETS</code>. In a clone of the repository it is <code>scripts/targets.json</code>. The full example is <a href="https://github.com/skyphusion-labs/search-mcp/blob/v0.7.0/scripts/targets.json.example">scripts/targets.json.example</a>.</p>
+      <p>Check what a target will upload before you trust it:</p>
+<pre><code>node scripts/sync.mjs my-target --dry-run</code></pre>
+      <p>The sync renames files that AI Search does not index natively, such as <code>.ts</code>, <code>.tsx</code>, <code>.service</code> and an extensionless <code>Dockerfile</code>, to <code>.txt</code> keys, so AI Search indexes them.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="bounds">
+    <div class="wrap prose">
+      <h2 id="bounds">Bounding a corpus: includePaths and excludePaths</h2>
+      <ul>
+        <li><strong><code>excludePaths</code> is a denylist and fails open.</strong> A new top-level file in a repo joins the corpus with no warning. That is fine for a docs site. It is wrong when the corpus boundary matters.</li>
+        <li><strong><code>includePaths</code> is an allowlist and fails closed.</strong> When a repo has an entry, only paths under those prefixes can go into the corpus. The sync refuses everything else.</li>
+        <li><strong>They compose by subtraction.</strong> <code>includePaths</code> decides what is eligible. Then <code>excludePaths</code> removes paths from that set. A denylist entry can never add a path back.</li>
+        <li><strong>Two levels.</strong> A map at the top level applies to every target that lists the repo. A map nested under a target applies only to that target, and wins for that repo when both levels set it. So one repo can be full-tree in one target and <code>_corpus/</code> only in another.</li>
+        <li><strong>An empty entry is an error.</strong> Omit a repo from <code>includePaths</code> to admit all of it. An entry that is present but empty (<code>[]</code>) does not mean "index nothing". The sync refuses it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="refusals">
+    <div class="wrap prose">
+      <h2 id="refusals">When the sync refuses to run</h2>
+      <p>An allowlist that matches nothing is worse than no allowlist. The sync would plan zero objects, the prune would delete the corpus that was there, and the reindex would succeed over nothing. So each of these refuses the run with exit code 2, before anything uploads or is pruned:</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Refusal</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>include_paths_no_match</code></td><td>An entry matched zero git-tracked files: a typo, or a directory that moved.</td></tr>
+            <tr><td><code>include_paths_entry_empty</code></td><td>The entry is <code>[]</code>.</td></tr>
+            <tr><td><code>include_paths_entry_invalid</code></td><td>An entry cannot match a git path: absolute, <code>..</code>, a backslash, or not a string.</td></tr>
+            <tr><td><code>include_paths_entry_not_array</code>, <code>include_paths_not_object</code></td><td>The config has the wrong shape.</td></tr>
+            <tr><td><code>include_paths_unknown_repo</code></td><td>The entry names a repo that no target lists, so nothing reads it.</td></tr>
+            <tr><td><code>include_paths_repo_not_cloned</code></td><td>An allowlisted repo is missing from the clone root.</td></tr>
+            <tr><td><code>include_paths_all_excluded</code></td><td><code>excludePaths</code> removed everything the allowlist selected.</td></tr>
+            <tr><td><code>include_paths_all_filtered</code></td><td>Nothing the allowlist selected passed the ingest filters.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The shape and repo-name checks run for every target on every sync, not only the target being synced. A stale <code>excludePaths</code> repo name gives a warning, not a refusal.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="size-cap">
+    <div class="wrap prose">
+      <h2 id="size-cap">Size cap</h2>
+      <p>The sync skips objects larger than <code>SYNC_MAX_BYTES</code> (default 4 MB). It lists the skipped files at the end of the run, because a missing file looks the same as a file the corpus never had. Use <code>--fail-on-skip</code> to make an incomplete corpus a failed run:</p>
+<pre><code>SYNC_MAX_BYTES=$((16 * 1024 * 1024)) node scripts/sync.mjs corpus --fail-on-skip</code></pre>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="manifest">
+    <div class="wrap prose">
+      <h2 id="manifest">Corpus manifest</h2>
+      <p>A corpus producer can publish a <code>manifest.json</code> next to its objects. The widget then shows citations instead of raw R2 keys. Each entry needs a <code>key</code>. The widget uses <code>title</code>, <code>url</code>, <code>page</code> and <code>total_pages</code> when they are present.</p>
+<pre><code>{ "pages": [
+  { "key": "my-doc/p003.txt", "title": "Deploy guide", "url": "/docs/deploy/", "page": 3, "total_pages": 12 }
+] }</code></pre>
+      <p>Keys match exactly first, then by suffix. The sync stores every object under its repo name (<code>&lt;repo&gt;/&lt;path&gt;</code>), but a producer writes its manifest with its own paths.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="sync-env">
+    <div class="wrap prose">
+      <h2 id="sync-env">Sync environment variables</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Variable</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td><code>R2_ACCESS_KEY_ID</code>, <code>R2_SECRET_ACCESS_KEY</code></td><td>An R2 API token with Object Read and Write on the corpus bucket only.</td></tr>
+            <tr><td><code>CLOUDFLARE_ACCOUNT_ID</code></td><td>The account that holds the bucket.</td></tr>
+            <tr><td><code>CORPUS_GIT_ORG</code></td><td>The GitHub organization the sync runner clones from.</td></tr>
+            <tr><td><code>GITHUB_TOKEN</code></td><td>Read access to the contents of the source repos, for the sync runner.</td></tr>
+            <tr><td><code>CORPUS_ROOT</code></td><td>The sync runner's own clone directory, kept apart from your working clones.</td></tr>
+            <tr><td><code>SYNC_REPO_ROOT</code></td><td>The clone root for <code>search-mcp-sync</code>. Default: the current directory with the npm CLIs, or the parent of the clone in a repository checkout.</td></tr>
+            <tr><td><code>SEARCH_MCP_TARGETS</code></td><td>The path to <code>targets.json</code>.</td></tr>
+            <tr><td><code>SYNC_MAX_BYTES</code></td><td>The <a href="#size-cap">size cap</a>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="query-config">
+    <div class="wrap prose">
+      <h2 id="query-config">Query Worker settings</h2>
+      <p>Start from <a href="https://github.com/skyphusion-labs/search-mcp/blob/v0.7.0/wrangler.toml.example">wrangler.toml.example</a>.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Setting</th><th>Kind</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td><code>SEARCH</code></td><td>AI Search binding</td><td>Set <code>instance_name</code> to your instance.</td></tr>
+            <tr><td><code>ASK_LIMITER</code></td><td>Rate limit binding</td><td>The per-IP limit on <code>/ask</code>. The example allows 20 requests in 60 seconds.</td></tr>
+            <tr><td><code>ALLOWED_ORIGINS</code></td><td>Var</td><td>A comma-separated list of the page origins that may call <code>/ask</code>.</td></tr>
+            <tr><td><code>GENERATION_MODEL</code></td><td>Var</td><td>The model that writes the answer.</td></tr>
+            <tr><td><code>ASSISTANT_SYSTEM_PROMPT</code></td><td>Var, optional</td><td>The system prompt for answers.</td></tr>
+            <tr><td><code>ORIGIN_PROFILES</code></td><td>Var, optional</td><td>A JSON object that maps an exact request origin to a system prompt for that site. See <a href="/widget/#profiles">per-site system prompts</a>.</td></tr>
+            <tr><td><code>TURNSTILE_SECRET</code></td><td>Secret, optional</td><td>Turns on the Turnstile check. When it is not set, the Worker skips verification.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="mcp-config">
+    <div class="wrap prose">
+      <h2 id="mcp-config">MCP Worker settings</h2>
+      <p>Start from <a href="https://github.com/skyphusion-labs/search-mcp/blob/v0.7.0/wrangler.mcp.toml.example">wrangler.mcp.toml.example</a>.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Setting</th><th>Kind</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td><code>MCP_TOKEN</code></td><td>Secret, required</td><td>One token, or comma-separated <code>name=token</code> pairs so that logs name each consumer. Without it the Worker refuses every request.</td></tr>
+            <tr><td><code>SEARCH</code></td><td>AI Search binding</td><td>Set <code>instance_name</code> to your instance.</td></tr>
+            <tr><td><code>CORPUS</code></td><td>R2 binding, recommended</td><td>The bucket the sync uploads to. <code>get_file</code> and <code>corpus_status</code> need it, and <code>list_repos</code> can read repo names from it.</td></tr>
+            <tr><td><code>CORPUS_REPOS</code></td><td>Var, optional</td><td>A JSON array of repo names, or <code>{"repos":[...],"description":"..."}</code>. When set, <code>list_repos</code> uses it instead of listing R2.</td></tr>
+            <tr><td><code>GENERATION_MODEL</code></td><td>Var, optional</td><td>The model for the <code>ask</code> tool.</td></tr>
+            <tr><td><code>GET_FILE_MAX_BYTES</code></td><td>Var, optional</td><td>The default byte limit for <code>get_file</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="reindex">
+    <div class="wrap prose">
+      <h2 id="reindex">Reindex behavior</h2>
+      <p>AI Search refuses a new reindex job in two cases, and <code>search-mcp-sync-run</code> waits out both before it starts one:</p>
+      <ol>
+        <li><strong>A job is running.</strong> A new job does not queue behind it. Cloudflare ends the running job and starts again. So the runner waits for the running job to end.</li>
+        <li><strong>The cooldown after a job.</strong> After a job ends, a new one is refused for a short time with <code>sync_in_cooldown</code> (code 7020). The runner retries until it clears.</li>
+      </ol>
+      <p>The runner also retries <code>unable_to_connect_to_ai_search</code> (code 7017) under the cooldown budget. Each wait has its own budget of 10 minutes. If a budget runs out, the run fails and says so. The files in R2 are already uploaded, so nothing is lost: the index catches up on the next sync.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <ul>
+      <li><a href="/privacy/">Privacy</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp/releases/tag/v0.7.0">Latest release</a></li>
+      <li><a href="https://www.npmjs.com/package/@skyphusion/search-mcp">npm package</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp">search-mcp source</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp-site">Site source</a></li>
+      <li><a href="https://skyphusion.org">Skyphusion Labs</a></li>
+    </ul>
+    <p>This site sets no cookies and loads no trackers, fonts or scripts from anyone else.</p>
+    <p>search-mcp is free software under the AGPL-3.0. This site is AGPL-3.0 too.</p>
+  </div>
+</footer>
+</body>
+</html>

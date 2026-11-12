@@ -1,0 +1,66 @@
+name: ci
+
+# Required checks on main (org ruleset aviation-grade-main-org): the job names `ci` and
+# `coverage` ARE the required contexts. Do not rename them.
+# Each job runs its controls first: the tests prove the gate goes red on the defects it
+# exists to catch, and only then does it judge the real site.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  # Daily, so a new search-mcp release turns ci red here even when nobody opens a site PR
+  # (check-upstream-version.mjs). Every other step is unchanged by a schedule.
+  schedule:
+    - cron: "29 7 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+      - name: Install (lockfile)
+        run: npm ci --no-audit --no-fund
+      - name: Syntax of every script
+        run: |
+          set -euo pipefail
+          for f in scripts/*.mjs test/*.mjs site/assets/*.js; do node --check "$f"; done
+      - name: Control -- the checks go red on real defects
+        run: node --test test/*.test.mjs
+      - name: HTML is valid
+        run: npx --no-install html-validate "site/**/*.html"
+      - name: Links, assets, no third-party resources, CSP, no dashes
+        run: node scripts/check-site.mjs site
+      - name: The site links the latest search-mcp release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-upstream-version.mjs site
+      - name: wrangler.toml is a valid static-assets Worker
+        run: npx --no-install wrangler deploy --dry-run --outdir "$RUNNER_TEMP/dry-run"
+
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+      - name: Control -- coverage goes red on an unbuilt or unlinked page
+        run: node --test --test-name-pattern="coverage|real site" test/*.test.mjs
+      - name: Every site map page is built, reachable and linked
+        run: node scripts/check-coverage.mjs site

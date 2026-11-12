@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>search-mcp: search and MCP tools on Cloudflare AI Search</title>
+<meta name="description" content="search-mcp is an open-source toolkit for Cloudflare AI Search: a bearer-gated MCP server for agents, a streaming ask Worker, a docs widget, and a git-to-R2 corpus sync.">
+<link rel="canonical" href="https://search-mcp.dev/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/theme.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="1" y="1" width="30" height="30" rx="8" fill="currentColor"/><circle cx="14" cy="14" r="6.5" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M19 19l6 6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>search-mcp</a>
+    <nav class="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="/install/">Install</a></li>
+        <li><a href="/configuration/">Configuration</a></li>
+        <li><a href="/mcp/">MCP tools</a></li>
+        <li><a href="/widget/">Ask widget</a></li>
+        <li><a href="/self-host/">Self-host</a></li>
+        <li><a href="https://github.com/skyphusion-labs/search-mcp">GitHub</a></li>
+      </ul>
+    </nav>
+    <button id="theme-btn" class="theme-btn" type="button" hidden>Theme</button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Open source. Runs on your own Cloudflare account.</p>
+      <h1>Search your repos and docs, for agents and for people.</h1>
+      <p class="lede">search-mcp is an open-source toolkit for Cloudflare AI Search. It copies the files from your git repos to R2, and AI Search indexes them. Agents query the index over MCP. People ask questions through a streaming endpoint and a widget on your docs site.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="/install/">Install</a>
+        <a class="btn btn-secondary" href="/mcp/">MCP tool reference</a>
+        <a class="btn btn-secondary" href="https://github.com/skyphusion-labs/search-mcp">Source on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="flow">
+    <div class="wrap prose">
+      <h2 id="flow">How the data moves</h2>
+      <ol class="pipeline" aria-label="Data path">
+        <li>git repos</li>
+        <li>sync.mjs</li>
+        <li>R2 bucket</li>
+        <li>AI Search instance</li>
+        <li>/ask and /mcp</li>
+      </ol>
+      <p>The sync uploads only git-tracked files. AI Search indexes the bucket. Two Workers read the same index: one for browsers and one for agents. You can also give each Worker its own instance, so that browser answers and agent retrieval use different corpora.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="parts">
+    <div class="wrap">
+      <h2 id="parts">The parts</h2>
+      <div class="grid grid-2">
+        <article class="card">
+          <h3><a href="/mcp/">MCP Worker</a></h3>
+          <p>A Streamable HTTP MCP server for agents at <code>POST /mcp</code>. It needs a bearer token and fails closed. Tools: <code>list_repos</code>, <code>search</code>, <code>get_file</code>, <code>ask</code> and <code>corpus_status</code>, plus <code>corpus://</code> resources.</p>
+        </article>
+        <article class="card">
+          <h3><a href="/self-host/#query-worker">Query Worker</a></h3>
+          <p><code>POST /ask</code> streams an answer for a browser. It has a CORS allowlist, an optional Turnstile check and a per-IP rate limit. Other Workers on your account can call it through the <code>SearchEntrypoint</code> service binding.</p>
+        </article>
+        <article class="card">
+          <h3><a href="/widget/">Ask widget</a></h3>
+          <p>One script and one stylesheet that you copy to your docs site. It shows the streamed answer and its sources. With a corpus manifest, sources show as titles and links instead of storage keys.</p>
+        </article>
+        <article class="card">
+          <h3><a href="/configuration/#targets">Corpus sync</a></h3>
+          <p>Two CLIs, <code>search-mcp-sync</code> and <code>search-mcp-sync-run</code>, upload git-tracked files to R2 and start a reindex. They rename TypeScript, Dockerfiles and other text files that AI Search would skip, so those files are indexed too.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="design">
+    <div class="wrap">
+      <h2 id="design">Design choices</h2>
+      <ul class="facts prose">
+        <li><strong>The MCP Worker fails closed.</strong> With no <code>MCP_TOKEN</code>, or a wrong bearer token, it refuses the request. A token can carry a name, so logs show which consumer called.</li>
+        <li><strong>An allowlist must match something.</strong> <code>includePaths</code> admits only the paths you list. An entry that matches no files stops the sync before it uploads or deletes anything, so a typo cannot empty a live corpus.</li>
+        <li><strong>Skipped files are reported.</strong> Files over the size cap are listed at the end of each run, and <code>--fail-on-skip</code> makes an incomplete corpus a failed run.</li>
+        <li><strong>A reindex waits its turn.</strong> The sync runner waits for a running reindex job and for the AI Search cooldown, so the job it starts sees every file it uploaded.</li>
+        <li><strong>No sources, no confident answer.</strong> When a question retrieves no sources, the widget shows your empty-corpus text. An upstream error shows as an error, not as an empty result.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="release">
+    <div class="wrap prose">
+      <h2 id="release">Current release</h2>
+      <p>These pages document <a href="https://github.com/skyphusion-labs/search-mcp/releases/tag/v0.7.0">search-mcp v0.7.0</a>. It adds <code>SearchEntrypoint</code>, a named RPC entrypoint on the query Worker. See the <a href="https://github.com/skyphusion-labs/search-mcp/blob/v0.7.0/CHANGELOG.md">changelog</a> for every release.</p>
+      <p>The CLIs and the widget files are on npm as <a href="https://www.npmjs.com/package/@skyphusion/search-mcp">@skyphusion/search-mcp</a>. The unscoped name <code>search-mcp</code> on npm belongs to a different project. The Workers deploy from a clone of the repository.</p>
+      <p>search-mcp is free software under the <a href="https://github.com/skyphusion-labs/search-mcp/blob/v0.7.0/LICENSE">AGPL-3.0</a>.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="/install/">Install search-mcp</a>
+        <a class="btn btn-secondary" href="/self-host/">Deploy the Workers</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <ul>
+      <li><a href="/privacy/">Privacy</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp/releases/tag/v0.7.0">Latest release</a></li>
+      <li><a href="https://www.npmjs.com/package/@skyphusion/search-mcp">npm package</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp">search-mcp source</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp-site">Site source</a></li>
+      <li><a href="https://skyphusion.org">Skyphusion Labs</a></li>
+    </ul>
+    <p>This site sets no cookies and loads no trackers, fonts or scripts from anyone else.</p>
+    <p>search-mcp is free software under the AGPL-3.0. This site is AGPL-3.0 too.</p>
+  </div>
+</footer>
+</body>
+</html>

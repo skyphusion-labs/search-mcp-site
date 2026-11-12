@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask widget: search-mcp</title>
+<meta name="description" content="Add the search-mcp ask widget to a docs site: the embed snippet, its data attributes, the corpus manifest for citations, and per-site system prompts.">
+<link rel="canonical" href="https://search-mcp.dev/widget/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/theme.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="1" y="1" width="30" height="30" rx="8" fill="currentColor"/><circle cx="14" cy="14" r="6.5" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M19 19l6 6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>search-mcp</a>
+    <nav class="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="/install/">Install</a></li>
+        <li><a href="/configuration/">Configuration</a></li>
+        <li><a href="/mcp/">MCP tools</a></li>
+        <li><a href="/widget/" aria-current="page">Ask widget</a></li>
+        <li><a href="/self-host/">Self-host</a></li>
+        <li><a href="https://github.com/skyphusion-labs/search-mcp">GitHub</a></li>
+      </ul>
+    </nav>
+    <button id="theme-btn" class="theme-btn" type="button" hidden>Theme</button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-head">
+    <div class="wrap">
+      <p class="eyebrow">Ask widget</p>
+      <h1>Put an ask box on your docs site</h1>
+      <p class="lede">The ask widget is one script and one stylesheet, in vanilla JavaScript with no build step. It sends a question to the query Worker's <code>POST /ask</code> and shows the answer as it streams, with its sources.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="add">
+    <div class="wrap prose">
+      <h2 id="add">Add it to a page</h2>
+      <p>Copy <code>public/ask-widget.js</code> and <code>public/ask-widget.css</code> to your site, from the npm package or from the repository. Then add a target element and the script:</p>
+<pre><code>&lt;link rel="stylesheet" href="/ask-widget.css"&gt;
+&lt;div id="docs-ask"&gt;&lt;/div&gt;
+&lt;script defer src="/ask-widget.js"
+        data-endpoint="https://search.example.com/ask"
+        data-target="#docs-ask"
+        data-label="Ask the docs"
+        data-manifest="/corpus-manifest.json"
+        data-empty-text="Nothing in the indexed corpus addresses that."
+        data-sitekey="YOUR_TURNSTILE_SITEKEY"&gt;&lt;/script&gt;</code></pre>
+      <p>The page's origin must be in the query Worker's <code>ALLOWED_ORIGINS</code>, or <code>/ask</code> answers 403.</p>
+      <p>This website does not embed the widget, so it sends nothing to any search endpoint.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="attributes">
+    <div class="wrap prose">
+      <h2 id="attributes">Attributes</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Attribute</th><th>Default</th><th>Use</th></tr></thead>
+          <tbody>
+            <tr><td><code>data-endpoint</code></td><td><code>/ask</code></td><td>The URL of the query Worker's <code>/ask</code>.</td></tr>
+            <tr><td><code>data-target</code></td><td><code>#docs-ask</code></td><td>A CSS selector for the element the widget renders into.</td></tr>
+            <tr><td><code>data-label</code></td><td><code>Ask</code></td><td>The text of the label for the question input.</td></tr>
+            <tr><td><code>data-placeholder</code></td><td><code>Ask a question about the docs</code></td><td>The input placeholder.</td></tr>
+            <tr><td><code>data-manifest</code></td><td>none</td><td>The URL of a <a href="/configuration/#manifest">corpus manifest</a>. Without it, sources show as raw object keys.</td></tr>
+            <tr><td><code>data-empty-text</code></td><td><code>Nothing in the indexed corpus addresses that.</code></td><td>The text shown when a question retrieves no sources.</td></tr>
+            <tr><td><code>data-sitekey</code></td><td>none</td><td>Your Turnstile site key. Set it when the Worker has <code>TURNSTILE_SECRET</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="behavior">
+    <div class="wrap prose">
+      <h2 id="behavior">What the reader sees</h2>
+      <ul>
+        <li><strong>No sources:</strong> when a query retrieves no sources, the widget shows <code>data-empty-text</code>, so an answer with no sources does not stay on screen looking authoritative.</li>
+        <li><strong>An upstream error:</strong> the widget shows "Sorry, something went wrong" with a short reason. It does not show the empty-corpus text, because the search did not complete. This is the behavior since v0.6.0.</li>
+        <li><strong>A bad manifest:</strong> a missing or malformed manifest falls back to raw keys. Answers still work.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="turnstile">
+    <div class="wrap prose">
+      <h2 id="turnstile">Turnstile</h2>
+      <p>Turnstile is recommended for a public <code>/ask</code>:</p>
+      <ol>
+        <li>Create a Turnstile widget for your docs domain in the Cloudflare dashboard.</li>
+        <li>Set the secret on the query Worker: <code>wrangler secret put TURNSTILE_SECRET</code>.</li>
+        <li>Load the Turnstile script on the pages that embed the ask widget, and set <code>data-sitekey</code>.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="profiles">
+    <div class="wrap prose">
+      <h2 id="profiles">Per-site system prompts</h2>
+      <p>One query Worker can serve several sites. <code>ORIGIN_PROFILES</code> is a JSON object in <code>[vars]</code> that maps an exact request <code>Origin</code> to the system prompt for that site:</p>
+<pre><code>ORIGIN_PROFILES = '{"https://docs.example.com":"You are the docs assistant...","https://other.example":"You are..."}'</code></pre>
+      <p>The Worker uses <code>ORIGIN_PROFILES</code> first, then <code>ASSISTANT_SYSTEM_PROMPT</code>. It logs and ignores a malformed value, so a bad var cannot take <code>/ask</code> down.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <ul>
+      <li><a href="/privacy/">Privacy</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp/releases/tag/v0.7.0">Latest release</a></li>
+      <li><a href="https://www.npmjs.com/package/@skyphusion/search-mcp">npm package</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp">search-mcp source</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp-site">Site source</a></li>
+      <li><a href="https://skyphusion.org">Skyphusion Labs</a></li>
+    </ul>
+    <p>This site sets no cookies and loads no trackers, fonts or scripts from anyone else.</p>
+    <p>search-mcp is free software under the AGPL-3.0. This site is AGPL-3.0 too.</p>
+  </div>
+</footer>
+</body>
+</html>
