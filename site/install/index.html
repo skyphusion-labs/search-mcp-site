@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Install: search-mcp</title>
+<meta name="description" content="Install the search-mcp corpus sync CLIs and ask widget from npm, or clone the repository to deploy the Workers. Commands for search-mcp v0.7.0.">
+<link rel="canonical" href="https://search-mcp.dev/install/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/theme.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="1" y="1" width="30" height="30" rx="8" fill="currentColor"/><circle cx="14" cy="14" r="6.5" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M19 19l6 6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>search-mcp</a>
+    <nav class="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="/install/" aria-current="page">Install</a></li>
+        <li><a href="/configuration/">Configuration</a></li>
+        <li><a href="/mcp/">MCP tools</a></li>
+        <li><a href="/widget/">Ask widget</a></li>
+        <li><a href="/self-host/">Self-host</a></li>
+        <li><a href="https://github.com/skyphusion-labs/search-mcp">GitHub</a></li>
+      </ul>
+    </nav>
+    <button id="theme-btn" class="theme-btn" type="button" hidden>Theme</button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-head">
+    <div class="wrap">
+      <p class="eyebrow">Install</p>
+      <h1>Install search-mcp</h1>
+      <p class="lede">search-mcp has two parts that install differently. The corpus sync CLIs and the ask widget files come from npm. The two Workers deploy from a clone of the repository.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="need">
+    <div class="wrap prose">
+      <h2 id="need">What you need</h2>
+      <ul>
+        <li>Node 20 or later.</li>
+        <li>A Cloudflare account with Workers, R2 and AI Search turned on.</li>
+        <li>The git repos you want to index, cloned on the machine that runs the sync, or reachable by the sync runner.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="npm">
+    <div class="wrap prose">
+      <h2 id="npm">From npm: the sync CLIs and the widget</h2>
+<pre><code>npm install @skyphusion/search-mcp@0.7.0
+
+# or run a CLI without installing it:
+npx --package=@skyphusion/search-mcp@0.7.0 search-mcp-sync corpus --dry-run</code></pre>
+      <p>The package name is scoped, <code>@skyphusion/search-mcp</code>. The unscoped name <code>search-mcp</code> on npm belongs to a different project.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>search-mcp-sync</code></td><td>Uploads the git-tracked corpus files for one target to R2.</td></tr>
+            <tr><td><code>search-mcp-sync-run</code></td><td>Clones or fetches the repos, syncs every target, and can start a reindex.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Put <code>targets.json</code> in your project root, or set <code>SEARCH_MCP_TARGETS</code> to its path. Start from the example in the package:</p>
+<pre><code>cp node_modules/@skyphusion/search-mcp/scripts/targets.json.example ./targets.json</code></pre>
+      <p>The clone root is the current working directory. Set <code>SYNC_REPO_ROOT</code> to change it. The <a href="/configuration/#targets">configuration page</a> explains every field.</p>
+      <p>To use the ask widget, copy its two files into your docs site:</p>
+<pre><code>cp node_modules/@skyphusion/search-mcp/public/ask-widget.{js,css} ./docs/</code></pre>
+      <p>Then follow the <a href="/widget/">ask widget guide</a>.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="source">
+    <div class="wrap prose">
+      <h2 id="source">From source: the Workers</h2>
+      <p>The query Worker and the MCP Worker are not in the npm package. Clone the release tag:</p>
+<pre><code>git clone --branch v0.7.0 https://github.com/skyphusion-labs/search-mcp.git &amp;&amp; cd search-mcp
+npm install
+cp wrangler.toml.example wrangler.toml
+cp wrangler.mcp.toml.example wrangler.mcp.toml
+cp scripts/targets.json.example scripts/targets.json
+# edit the three files for your account, AI Search instance, bucket and repos
+
+npm run typecheck
+npm test</code></pre>
+      <p>This is <a href="https://github.com/skyphusion-labs/search-mcp/releases/tag/v0.7.0">search-mcp v0.7.0</a>, the current release. <code>npm run typecheck</code> checks the Workers code and the sync scripts as two separate TypeScript projects.</p>
+      <p>Do not commit <code>wrangler.toml</code>, <code>wrangler.mcp.toml</code> or <code>scripts/targets.json</code>. The repository ignores them in git.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="next">
+    <div class="wrap prose">
+      <h2 id="next">Next steps</h2>
+      <ol>
+        <li>Create the R2 bucket and the AI Search instance, then deploy the Workers: <a href="/self-host/">Self-host</a>.</li>
+        <li>Choose what goes into the corpus: <a href="/configuration/">Configuration</a>.</li>
+        <li>Connect an agent: <a href="/mcp/">MCP tool reference</a>.</li>
+      </ol>
+      <p>The full guide in the repository is <a href="https://github.com/skyphusion-labs/search-mcp/blob/v0.7.0/docs/DEPLOY.md">docs/DEPLOY.md</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <ul>
+      <li><a href="/privacy/">Privacy</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp/releases/tag/v0.7.0">Latest release</a></li>
+      <li><a href="https://www.npmjs.com/package/@skyphusion/search-mcp">npm package</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp">search-mcp source</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp-site">Site source</a></li>
+      <li><a href="https://skyphusion.org">Skyphusion Labs</a></li>
+    </ul>
+    <p>This site sets no cookies and loads no trackers, fonts or scripts from anyone else.</p>
+    <p>search-mcp is free software under the AGPL-3.0. This site is AGPL-3.0 too.</p>
+  </div>
+</footer>
+</body>
+</html>

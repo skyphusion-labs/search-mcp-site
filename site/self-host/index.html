@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Self-host: search-mcp</title>
+<meta name="description" content="Deploy search-mcp on your own Cloudflare account: R2, AI Search, corpus sync, the query Worker, the MCP Worker, service binding RPC, and troubleshooting.">
+<link rel="canonical" href="https://search-mcp.dev/self-host/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/theme.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="1" y="1" width="30" height="30" rx="8" fill="currentColor"/><circle cx="14" cy="14" r="6.5" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M19 19l6 6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>search-mcp</a>
+    <nav class="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="/install/">Install</a></li>
+        <li><a href="/configuration/">Configuration</a></li>
+        <li><a href="/mcp/">MCP tools</a></li>
+        <li><a href="/widget/">Ask widget</a></li>
+        <li><a href="/self-host/" aria-current="page">Self-host</a></li>
+        <li><a href="https://github.com/skyphusion-labs/search-mcp">GitHub</a></li>
+      </ul>
+    </nav>
+    <button id="theme-btn" class="theme-btn" type="button" hidden>Theme</button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-head">
+    <div class="wrap">
+      <p class="eyebrow">Self-host</p>
+      <h1>Deploy search-mcp on your Cloudflare account</h1>
+      <p class="lede">You run every part of search-mcp on your own account: the R2 bucket, the AI Search instance, and both Workers. Replace every <code>example.com</code> and <code>my-*</code> name below with your own.</p>
+      <nav class="toc" aria-label="On this page">
+        <p>On this page</p>
+        <ul>
+          <li><a href="#prereq">1. Before you start</a></li>
+          <li><a href="#r2">2. R2 bucket</a></li>
+          <li><a href="#ai-search">3. AI Search instance</a></li>
+          <li><a href="#sync">4. Sync the corpus</a></li>
+          <li><a href="#query-worker">5. Query Worker</a></li>
+          <li><a href="#mcp-worker">6. MCP Worker</a></li>
+          <li><a href="#separate">7. Separate instances</a></li>
+          <li><a href="#rpc">Service binding RPC</a></li>
+          <li><a href="#troubleshooting">Troubleshooting</a></li>
+        </ul>
+      </nav>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="prereq">
+    <div class="wrap prose">
+      <h2 id="prereq">1. Before you start</h2>
+      <ul>
+        <li>A Cloudflare account with Workers, R2 and AI Search turned on.</li>
+        <li><code>wrangler</code>, logged in: <code>npx wrangler login</code>.</li>
+        <li>A clone of search-mcp at the release tag. See <a href="/install/#source">Install from source</a>.</li>
+        <li>The git repos you want to index, cloned locally, or reachable by the sync runner.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="r2">
+    <div class="wrap prose">
+      <h2 id="r2">2. R2 bucket</h2>
+<pre><code>npx wrangler r2 bucket create my-search-corpus</code></pre>
+      <p>Create an R2 API token with Object Read and Write on this bucket only. Export it for the sync:</p>
+<pre><code>export R2_ACCESS_KEY_ID=...
+export R2_SECRET_ACCESS_KEY=...
+export CLOUDFLARE_ACCOUNT_ID=...</code></pre>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="ai-search">
+    <div class="wrap prose">
+      <h2 id="ai-search">3. AI Search instance</h2>
+<pre><code>npx wrangler ai-search create my-ai-search-instance --type r2 --source my-search-corpus</code></pre>
+      <p>Keep the instance name. It goes in both wrangler files and in <code>targets.json</code>.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="sync">
+    <div class="wrap prose">
+      <h2 id="sync">4. Sync the corpus</h2>
+      <p>Edit <code>scripts/targets.json</code>: set <code>repos</code>, <code>bucket</code> and <code>instance</code>. See <a href="/configuration/#targets">targets.json</a>.</p>
+      <h3>By hand, from local clones</h3>
+      <p>Clone the repos next to search-mcp, or set <code>SYNC_REPO_ROOT</code>. Then:</p>
+<pre><code>npm run sync:dry
+npm run sync
+npx wrangler ai-search jobs create my-ai-search-instance</code></pre>
+      <h3>Automated, in CI or on a schedule</h3>
+      <p>The sync runner uses its own clone directory (<code>CORPUS_ROOT</code>). It clones or fetches each repo, syncs, then starts a reindex:</p>
+<pre><code>export CORPUS_GIT_ORG=your-github-org
+export GITHUB_TOKEN=...    # read access to the source repos
+npm run sync:run</code></pre>
+      <p>To sync when a source repo merges, copy <a href="https://github.com/skyphusion-labs/search-mcp/blob/v0.7.0/docs/notify-corpus-sync.snippet.yml">docs/notify-corpus-sync.snippet.yml</a> into that repo's CI. It sends a <code>repository_dispatch</code> event.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="query-worker">
+    <div class="wrap prose">
+      <h2 id="query-worker">5. Query Worker</h2>
+<pre><code>cp wrangler.toml.example wrangler.toml</code></pre>
+      <p>Set <code>instance_name</code>, <code>ALLOWED_ORIGINS</code> and, if you want, <code>ASSISTANT_SYSTEM_PROMPT</code>. Add a route, or use the <code>workers.dev</code> URL. All settings are on the <a href="/configuration/#query-config">configuration page</a>.</p>
+<pre><code>npm run deploy
+curl "https://YOUR_QUERY_HOST/health"</code></pre>
+      <p>For a public <code>/ask</code>, turn on <a href="/widget/#turnstile">Turnstile</a>.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="mcp-worker">
+    <div class="wrap prose">
+      <h2 id="mcp-worker">6. MCP Worker</h2>
+<pre><code>cp wrangler.mcp.toml.example wrangler.mcp.toml
+umask 077 &amp;&amp; openssl rand -hex 32 &gt; /tmp/mcp-token
+wrangler secret put MCP_TOKEN -c wrangler.mcp.toml &lt; /tmp/mcp-token
+rm /tmp/mcp-token
+npm run deploy:mcp</code></pre>
+      <p>Bind the same R2 bucket the sync uploads to as <code>CORPUS</code>, so that <code>get_file</code> and <code>corpus_status</code> work. Then <a href="/mcp/#connect">connect a client</a>.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="separate">
+    <div class="wrap prose">
+      <h2 id="separate">7. Separate instances</h2>
+      <p>You can run the query Worker and the MCP Worker against different AI Search instances, so that browser answers and agent retrieval use different corpora. Use two R2 buckets, two instances, and a different <code>instance_name</code> in each wrangler file.</p>
+      <p>To add another public query Worker, share <code>src/index.ts</code> with its own wrangler file:</p>
+      <ol>
+        <li>Create a bucket and an AI Search instance.</li>
+        <li>Add a target in <code>targets.json</code>. Use a nested <code>includePaths</code> if the corpus boundary matters.</li>
+        <li>Copy a wrangler file as a template, and set <code>instance_name</code>, the origins and the route.</li>
+        <li>Deploy it with <code>wrangler deploy -c your.toml</code>.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="rpc">
+    <div class="wrap prose">
+      <h2 id="rpc">Service binding RPC</h2>
+      <p><code>POST /ask</code> is the browser route. Since v0.7.0, another Worker on the same account can get retrieval chunks without that route. It binds to the named entrypoint <code>SearchEntrypoint</code>, which the query Worker exports from <code>src/index.ts</code>. The MCP Worker does not export it.</p>
+      <p>The entrypoint is not a URL: internet requests still reach only the default export. The caller selects the class in its own wrangler file:</p>
+<pre><code>[[services]]
+binding = "SEARCH_RPC"
+service = "your-query-worker-name"
+entrypoint = "SearchEntrypoint"</code></pre>
+      <p><code>await env.SEARCH_RPC.search(question)</code> returns <code>{ chunks }</code> from the same <code>SEARCH</code> binding that <code>/ask</code> uses, with the same retrieval options (hybrid, 6 results, query rewrite on). It generates no text. The question must be a non-empty string of at most 2000 characters after trim.</p>
+      <p>A bad call throws an <code>Error</code> with one of these messages: <code>empty_question</code>, <code>question_too_long</code>, <code>rate_limited</code>, <code>search_unavailable</code>. <code>ASK_LIMITER</code> still applies, with the key <code>ask:rpc</code> for every binding caller. There is no origin check and no Turnstile check, because only a Worker whose config names this entrypoint gets a stub.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="troubleshooting">
+    <div class="wrap prose">
+      <h2 id="troubleshooting">Troubleshooting</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Symptom</th><th>Check</th></tr></thead>
+          <tbody>
+            <tr><td>Empty search results</td><td>Are the R2 objects there? Run <code>npx wrangler ai-search stats INSTANCE</code>.</td></tr>
+            <tr><td>The sync exits 2 with <code>include_paths_*</code></td><td>An allowlist matched nothing, named an unknown repo, or was emptied by <code>excludePaths</code>. The message names the repo and the prefix. Fix <code>targets.json</code> and run again. See <a href="/configuration/#refusals">refusals</a>.</td></tr>
+            <tr><td>TypeScript is not indexed</td><td>The sync renames it to <code>.txt</code>. Run the sync and a reindex job again.</td></tr>
+            <tr><td>The reindex fails after a good R2 upload</td><td>Cooldown <code>7020</code> or connect error <code>7017</code>. The sync runner retries both. Wait, or run the reindex again.</td></tr>
+            <tr><td>MCP answers 401</td><td>Is <code>MCP_TOKEN</code> set? Does the bearer header match it exactly?</td></tr>
+            <tr><td><code>/ask</code> answers 403 for the origin</td><td><code>ALLOWED_ORIGINS</code> must include the page origin.</td></tr>
+            <tr><td><code>/ask</code> answers 403 for Turnstile</td><td><code>TURNSTILE_SECRET</code> must be set, and the widget site key must match it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The source for this page is <a href="https://github.com/skyphusion-labs/search-mcp/blob/v0.7.0/docs/DEPLOY.md">docs/DEPLOY.md</a> at search-mcp v0.7.0. Report a problem in <a href="https://github.com/skyphusion-labs/search-mcp/issues">the issue tracker</a>.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <ul>
+      <li><a href="/privacy/">Privacy</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp/releases/tag/v0.7.0">Latest release</a></li>
+      <li><a href="https://www.npmjs.com/package/@skyphusion/search-mcp">npm package</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp">search-mcp source</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp-site">Site source</a></li>
+      <li><a href="https://skyphusion.org">Skyphusion Labs</a></li>
+    </ul>
+    <p>This site sets no cookies and loads no trackers, fonts or scripts from anyone else.</p>
+    <p>search-mcp is free software under the AGPL-3.0. This site is AGPL-3.0 too.</p>
+  </div>
+</footer>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy: search-mcp</title>
+<meta name="description" content="The search-mcp website sets no cookies and loads no analytics, trackers, fonts or scripts from anyone else. This page lists what the site does and does not do.">
+<link rel="canonical" href="https://search-mcp.dev/privacy/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/site.css">
+<script src="/assets/theme.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/"><svg class="mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="1" y="1" width="30" height="30" rx="8" fill="currentColor"/><circle cx="14" cy="14" r="6.5" fill="none" stroke="#fff" stroke-width="2.6"/><path d="M19 19l6 6" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/></svg>search-mcp</a>
+    <nav class="site-nav" aria-label="Main">
+      <ul>
+        <li><a href="/install/">Install</a></li>
+        <li><a href="/configuration/">Configuration</a></li>
+        <li><a href="/mcp/">MCP tools</a></li>
+        <li><a href="/widget/">Ask widget</a></li>
+        <li><a href="/self-host/">Self-host</a></li>
+        <li><a href="https://github.com/skyphusion-labs/search-mcp">GitHub</a></li>
+      </ul>
+    </nav>
+    <button id="theme-btn" class="theme-btn" type="button" hidden>Theme</button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="page-head">
+    <div class="wrap">
+      <p class="eyebrow">Privacy</p>
+      <h1>This site does not track you</h1>
+      <p class="lede">This page lists what the search-mcp website does and does not do with your visit.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="site">
+    <div class="wrap prose">
+      <h2 id="site">This website</h2>
+      <ul>
+        <li><strong>No cookies.</strong> The site sets none.</li>
+        <li><strong>No trackers and no analytics.</strong> There is no analytics script and no tracking pixel.</li>
+        <li><strong>Nothing from anyone else.</strong> Every script, stylesheet, image and font comes from this site. There are no third-party fonts, embeds, frames or CDNs. The site's Content Security Policy enforces this in your browser, and its CI fails any change that adds one.</li>
+        <li><strong>No search calls.</strong> The site does not embed the ask widget and does not call any search-mcp Worker.</li>
+        <li><strong>Your theme choice stays in your browser.</strong> If you pick light or dark, the choice is saved in this browser's local storage. It is never sent anywhere.</li>
+        <li><strong>Hosting.</strong> Cloudflare serves the site. Like any web host, it receives each request, including your IP address and browser details, in order to answer it. Worker logs and analytics are off for this site.</li>
+      </ul>
+      <p>The site's source is public, so you can check every claim above: <a href="https://github.com/skyphusion-labs/search-mcp-site">skyphusion-labs/search-mcp-site</a>.</p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="software">
+    <div class="wrap prose">
+      <h2 id="software">The search-mcp software</h2>
+      <p>search-mcp is software you run yourself, on your own Cloudflare account. Your corpus, your index and your tokens stay in that account. This website is documentation only.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <ul>
+      <li><a href="/privacy/">Privacy</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp/releases/tag/v0.7.0">Latest release</a></li>
+      <li><a href="https://www.npmjs.com/package/@skyphusion/search-mcp">npm package</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp">search-mcp source</a></li>
+      <li><a href="https://github.com/skyphusion-labs/search-mcp-site">Site source</a></li>
+      <li><a href="https://skyphusion.org">Skyphusion Labs</a></li>
+    </ul>
+    <p>This site sets no cookies and loads no trackers, fonts or scripts from anyone else.</p>
+    <p>search-mcp is free software under the AGPL-3.0. This site is AGPL-3.0 too.</p>
+  </div>
+</footer>
+</body>
+</html>

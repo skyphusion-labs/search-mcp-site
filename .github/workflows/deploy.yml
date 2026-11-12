@@ -1,0 +1,106 @@
+name: deploy
+
+# Deploys the static-assets Worker `search-mcp-site` (wrangler.toml) to Cloudflare, on the
+# custom domains search-mcp.dev and www.search-mcp.dev. Gates, the same shape as
+# postern-site deploy.yml:
+#   * a pushed vX.Y.Z tag deploys only when the tagged commit is on main AND the tag
+#     matches a `## X.Y.Z` heading in CHANGELOG.md (scripts/deploy-gate.mjs);
+#   * workflow_dispatch deploys only from main.
+# A merge to main never deploys.
+#
+# Needs two repo secrets. The job refuses, by name, if either is missing:
+#   SEARCH_MCP_SITE_DEPLOY_TOKEN  a Cloudflare API token for this deploy only. It is
+#                                 passed to wrangler as CLOUDFLARE_API_TOKEN. The name is
+#                                 per-function on purpose: a repo secret named
+#                                 CLOUDFLARE_API_TOKEN would shadow an org secret of the
+#                                 same name, and a missing repo copy would fall through to
+#                                 the org token silently.
+#   CLOUDFLARE_ACCOUNT_ID         the account that holds the search-mcp.dev zone.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-search-mcp-site
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history: merge-base has to be able to walk main.
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+      # The control runs first: a gate whose refusal has never been observed is decoration.
+      - name: Control -- the ref and version gate can refuse
+        run: node --test --test-name-pattern="deploy gate" test/*.test.mjs
+      - name: The ref may deploy, and a tag matches CHANGELOG.md
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: node scripts/deploy-gate.mjs "$EVENT" "$REF" CHANGELOG.md
+      - name: The commit is on main
+        run: |
+          set -euo pipefail
+          if ! git fetch --no-tags origin main; then
+            echo "::error::could not fetch origin/main, so ancestry is UNVERIFIABLE. Refusing to deploy."
+            exit 1
+          fi
+          head="$(git rev-parse HEAD)"
+          if ! git merge-base --is-ancestor "$head" origin/main; then
+            echo "::error::commit ${head} is not on origin/main; refusing to deploy an unreviewed commit. Land it on main and re-tag; do not move the tag."
+            exit 1
+          fi
+          echo "commit ${head} is on origin/main; ancestry guard passed."
+
+  deploy:
+    needs: gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "22"
+      # wrangler comes from package-lock.json, never a floating npx download.
+      - name: Install (lockfile)
+        run: npm ci --no-audit --no-fund
+      - name: The site passes its own checks
+        run: |
+          set -euo pipefail
+          node --test test/*.test.mjs
+          npx --no-install html-validate "site/**/*.html"
+          node scripts/check-site.mjs site
+          node scripts/check-coverage.mjs site
+      - name: Credentials are present
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.SEARCH_MCP_SITE_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -eu
+          [ -n "${CLOUDFLARE_API_TOKEN:+SET}" ] || { echo "::error::secret SEARCH_MCP_SITE_DEPLOY_TOKEN is not set for this repo"; exit 1; }
+          [ -n "${CLOUDFLARE_ACCOUNT_ID:+SET}" ] || { echo "::error::secret CLOUDFLARE_ACCOUNT_ID is not set for this repo"; exit 1; }
+          echo "wrangler $(npx --no-install wrangler --version)"
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.SEARCH_MCP_SITE_DEPLOY_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --no-install wrangler deploy
+      # What the host SERVES after the Cloudflare edge has had its turn, fetched as a
+      # browser (the postern-site#3 shape). The ci checks read repo files and cannot see an edge
+      # rewrite such as the 2026-11-10 analytics beacon postern-site saw. A failure here means the deploy
+      # is live but wrong: fix the cause (zone setting or site) and redeploy.
+      - name: Post-deploy smoke (fetched as a browser)
+        run: node scripts/smoke.mjs

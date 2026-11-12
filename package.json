@@ -1,0 +1,23 @@
+{
+  "name": "search-mcp-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Landing and docs site for search-mcp, an MCP server and search toolkit on Cloudflare AI Search.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node scripts/check-site.mjs",
+    "coverage": "node scripts/check-coverage.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "validate": "html-validate \"site/**/*.html\"",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "html-validate": "11.17.0",
+    "wrangler": "4.153.0"
+  }
+}

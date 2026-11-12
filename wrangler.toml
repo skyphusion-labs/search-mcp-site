@@ -1,0 +1,28 @@
+# search-mcp-site: a static-assets-only Worker. No Worker script, no bindings, no build step.
+# Everything served is in ./site.
+#
+# This site is documentation only. It does not call any search-mcp Worker. In particular it
+# never points at search.vivijure.com, which serves the vivijure project.
+name = "search-mcp-site"
+compatibility_date = "2026-10-01"
+
+# workers.dev and preview URLs stay off. The site serves the search-mcp.dev apex and www
+# (zone search-mcp.dev). site-mode.json has "preview": false, so pages are indexable.
+# To stage a redesign, add a preview host and run `node scripts/set-preview.mjs on` for
+# that build only.
+workers_dev = false
+preview_urls = false
+routes = [
+  { pattern = "search-mcp.dev", custom_domain = true },
+  { pattern = "www.search-mcp.dev", custom_domain = true },
+]
+
+[assets]
+directory = "./site"
+html_handling = "auto-trailing-slash"
+not_found_handling = "404-page"
+
+# The privacy page says Worker logs are off for this site. Keep this false, or change
+# that page in the same PR.
+[observability]
+enabled = false
