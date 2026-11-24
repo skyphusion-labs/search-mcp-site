@@ -7,6 +7,13 @@ workflow refuses a tag without its heading. Bump-at-release: changes collect und
 
 ## Unreleased
 
+## 0.1.1 (2026-11-24)
+
+- Open Graph and Twitter card tags on every page. Shared image at `/assets/og.png`.
+- Version pins move to search-mcp v0.7.1.
+- Docs site restored after the overscoped corpus teardown; Worker redeployed to
+  `search-mcp.dev` and `www.search-mcp.dev`.
+
 ## 0.1.0 (2026-11-12)
 
 - First site, documenting search-mcp v0.7.0: home, install, configuration, MCP tool
